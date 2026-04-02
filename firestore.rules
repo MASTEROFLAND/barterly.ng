@@ -1,0 +1,120 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (auth.uid)
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (required)
+    //   - email: string (required)
+    //   - photoURL: string (optional)
+    //   - bio: string (optional)
+    //   - location: string (optional)
+    //
+    // Collection: items
+    // Document ID: itemId
+    // Fields:
+    //   - id: string (required)
+    //   - ownerId: string (required)
+    //   - title: string (required)
+    //   - description: string (required)
+    //   - category: string (required)
+    //   - condition: string (required)
+    //   - images: list of strings (optional)
+    //   - desiredItems: string (required)
+    //   - status: string (required, ['available', 'traded', 'hidden'])
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: trades
+    // Document ID: tradeId
+    // Fields:
+    //   - id: string (required)
+    //   - senderId: string (required)
+    //   - receiverId: string (required)
+    //   - senderItemId: string (required)
+    //   - receiverItemId: string (required)
+    //   - status: string (required, ['pending', 'accepted', 'declined', 'cancelled'])
+    //   - message: string (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'email']) &&
+             data.uid is string &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidItem(data) {
+      return data.keys().hasAll(['ownerId', 'title', 'description', 'status', 'createdAt']) &&
+             data.ownerId == request.auth.uid &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.description is string && data.description.size() < 2000 &&
+             data.status in ['available', 'traded', 'hidden'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidTrade(data) {
+      return data.keys().hasAll(['senderId', 'receiverId', 'senderItemId', 'receiverItemId', 'status', 'createdAt']) &&
+             data.senderId == request.auth.uid &&
+             data.status == 'pending' &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['itemId', 'senderId', 'receiverId', 'text', 'createdAt']) &&
+             data.senderId == request.auth.uid &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 5000 &&
+             data.createdAt is timestamp;
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+    }
+
+    match /items/{itemId} {
+      allow read: if true; // Publicly viewable
+      allow create: if isAuthenticated() && isValidItem(request.resource.data);
+      allow update: if isAuthenticated() && (
+        (isOwner(resource.data.ownerId) && isValidItem(request.resource.data)) ||
+        // Allow status update by trade participants if needed, but usually owner handles it
+        (isOwner(resource.data.ownerId))
+      );
+      allow delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+    }
+
+    match /trades/{tradeId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.receiverId);
+      allow create: if isAuthenticated() && isValidTrade(request.resource.data);
+      allow update: if isAuthenticated() && (
+        // Sender can cancel
+        (request.auth.uid == resource.data.senderId && request.resource.data.status == 'cancelled') ||
+        // Receiver can accept/decline
+        (request.auth.uid == resource.data.receiverId && request.resource.data.status in ['accepted', 'declined'])
+      ) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.receiverId);
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data);
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.receiverId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+    }
+  }
+}

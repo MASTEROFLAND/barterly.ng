@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "bio": { "type": "string" },
+        "location": { "type": "string" }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "Item": {
+      "title": "Item",
+      "description": "An item listed for trade",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "condition": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "desiredItems": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "traded", "hidden"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "title", "description", "status"]
+    },
+    "Trade": {
+      "title": "Trade",
+      "description": "A trade proposal between two users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "senderItemId": { "type": "string" },
+        "receiverItemId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined", "cancelled"] },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "receiverId", "senderItemId", "receiverItemId", "status"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A private message between two users about an item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "itemId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["itemId", "senderId", "receiverId", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/items/{itemId}": {
+      "schema": "Item",
+      "description": "Trade items"
+    },
+    "/trades/{tradeId}": {
+      "schema": "Trade",
+      "description": "Trade proposals"
+    },
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Private messages"
+    }
+  }
+}
